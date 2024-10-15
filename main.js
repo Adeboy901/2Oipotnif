@@ -63,7 +63,7 @@ class Fintopio {
     }
   }
 
-  async waitWithCountdown(seconds, msg = 'continue') {
+  
   async waitWithCountdown(seconds, msg = 'continue') {
     // Add randomness to the delay: ±3 seconds
     const randomSeconds = seconds + Math.floor(Math.random() * 7) - 3;
