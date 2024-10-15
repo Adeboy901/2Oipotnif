@@ -30,7 +30,6 @@ class Fintopio {
     // Initialize Telegram Bot
     this.telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
     this.telegramChatId = process.env.TELEGRAM_CHAT_ID;
-    this.bot = new TelegramBot(this.telegramBotToken, { polling: true });
   }
 
   async log(msg, color = "white") {
@@ -48,8 +47,17 @@ class Fintopio {
   }
 
   async sendLogToTelegram(msg) {
+    if (!this.telegramBotToken || !this.telegramChatId) {
+      console.log("Telegram bot token or chat ID not set. Skipping Telegram message.");
+      return;
+    }
+
     try {
-      await this.bot.sendMessage(this.telegramChatId, msg);
+      const url = `https://api.telegram.org/bot${this.telegramBotToken}/sendMessage`;
+      await axios.post(url, {
+        chat_id: this.telegramChatId,
+        text: msg
+      });
     } catch (error) {
       console.error(`Failed to send log to Telegram: ${error.message}`);
     }
