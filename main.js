@@ -64,9 +64,14 @@ class Fintopio {
   }
 
   async waitWithCountdown(seconds, msg = 'continue') {
+  async waitWithCountdown(seconds, msg = 'continue') {
+    // Add randomness to the delay: ±3 seconds
+    const randomSeconds = seconds + Math.floor(Math.random() * 7) - 3;
+    const actualSeconds = Math.max(1, randomSeconds); // Ensure positive delay
+
     const spinners = ["|", "/", "-", "\\"];
     let i = 0;
-    for (let s = seconds; s >= 0; s--) {
+    for (let s = actualSeconds; s >= 0; s--) {
       readline.cursorTo(process.stdout, 0);
       process.stdout.write(
         colors.cyan(`${spinners[i]} Waiting ${s} seconds to ${msg} ${spinners[i]}`)
@@ -140,6 +145,9 @@ class Fintopio {
   }
 
   async startFarming(token) {
+    // Add delay before starting farming
+    await this.waitWithCountdown(Math.floor(Math.random() * 11) + 5, 'start farming');
+    
     const url = `${this.baseUrl}/farming/farm`;
     const headers = {
       ...this.headers,
@@ -166,6 +174,9 @@ class Fintopio {
   }
 
   async claimFarming(token) {
+    // Add delay before claiming farming rewards
+    await this.waitWithCountdown(Math.floor(Math.random() * 11) + 5, 'claim farming rewards');
+    
     const url = `${this.baseUrl}/farming/claim`;
     const headers = {
       ...this.headers,
@@ -233,6 +244,9 @@ class Fintopio {
   }
 
   async startTask(token, taskId, slug) {
+    // Add delay before starting tasks
+    await this.waitWithCountdown(Math.floor(Math.random() * 6) + 3, `start task ${slug}`);
+    
     const url = `${this.baseUrl}/hold/tasks/${taskId}/start`;
     const headers = {
         ...this.headers,
@@ -249,6 +263,9 @@ class Fintopio {
   }
 
   async claimTask(token, taskId, slug, rewardAmount) {
+    // Add delay before claiming tasks
+    await this.waitWithCountdown(Math.floor(Math.random() * 6) + 3, `claim task ${slug}`);
+    
     const url = `${this.baseUrl}/hold/tasks/${taskId}/claim`;
     const headers = {
         ...this.headers,
@@ -371,12 +388,19 @@ class Fintopio {
         }
       }
 
+      // Add delay between processing users (10-20 seconds)
+        if (i < users.length - 1) {
+          await this.waitWithCountdown(Math.floor(Math.random() * 11) + 10, 'process next user');
+        }
+      }
+
+      // Add randomness to the main loop delay
       const waitTime = this.calculateWaitTime(firstAccountFinishTime);
       if (waitTime && waitTime > 0) {
-        await this.waitWithCountdown(Math.floor(waitTime / 1000));
+        const randomWaitTime = waitTime + (Math.random() * 300000) - 150000; // Add ±2.5 minutes
+        await this.waitWithCountdown(Math.floor(randomWaitTime / 1000), 'start next cycle');
       } else {
-        await this.log("No valid wait time, continuing loop immediately.", "yellow");
-        await this.waitWithCountdown(5);
+        await this.waitWithCountdown(Math.floor(Math.random() * 31) + 30, 'start next cycle'); // 30-60 seconds if no valid wait time
       }
     }
   }
