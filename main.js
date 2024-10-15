@@ -404,7 +404,6 @@ class Fintopio {
       }
     }
   }
-}
 
 if (require.main === module) {
   const fintopio = new Fintopio();
