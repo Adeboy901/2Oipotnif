@@ -5,7 +5,7 @@ const colors = require("colors");
 const readline = require("readline");
 const { DateTime } = require("luxon");
 const TelegramBot = require('node-telegram-bot-api');
-
+require('dotenv').config();
 const stripAnsi = (str) => {
   // Regular expression to match ANSI color codes
   const ansiRegex = /\x1b\[.*?m/g;
@@ -28,8 +28,8 @@ class Fintopio {
         "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Mobile Safari/537.36",
     };
     // Initialize Telegram Bot
-    this.telegramBotToken = '12345678:gantikodemu'; // Replace with your Telegram bot token
-    this.telegramChatId = '1122334455'; // Replace with your Telegram chat ID
+    this.telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
+    this.telegramChatId = process.env.TELEGRAM_CHAT_ID;
     this.bot = new TelegramBot(this.telegramBotToken, { polling: true });
   }
 
