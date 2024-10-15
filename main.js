@@ -34,10 +34,10 @@ class Fintopio {
   }
 
   async log(msg, color = "white") {
-    const coloredMsg = msg[color];
+    const coloredMsg = colors[color](msg);
     console.log(coloredMsg);
-    await this.logToFile(coloredMsg);
-    await this.sendLogToTelegram(coloredMsg);
+    await this.logToFile(stripAnsi(coloredMsg));
+    await this.sendLogToTelegram(stripAnsi(coloredMsg));
   }
 
   async logToFile(msg) {
@@ -49,8 +49,7 @@ class Fintopio {
 
   async sendLogToTelegram(msg) {
     try {
-      const cleanedMsg = stripAnsi(msg); // Remove ANSI color codes
-      await this.bot.sendMessage(this.telegramChatId, cleanedMsg);
+      await this.bot.sendMessage(this.telegramChatId, msg);
     } catch (error) {
       console.error(`Failed to send log to Telegram: ${error.message}`);
     }
@@ -62,7 +61,7 @@ class Fintopio {
     for (let s = seconds; s >= 0; s--) {
       readline.cursorTo(process.stdout, 0);
       process.stdout.write(
-        `${spinners[i]} Waiting ${s} seconds to ${msg} ${spinners[i]}`.cyan
+        colors.cyan(`${spinners[i]} Waiting ${s} seconds to ${msg} ${spinners[i]}`)
       );
       i = (i + 1) % spinners.length;
       await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -291,9 +290,10 @@ class Fintopio {
         const userData = users[i];
         const first_name = this.extractFirstName(userData);
         await this.log(
-          `${"=".repeat(5)} Account ${i + 1} | ${first_name.green} ${"=".repeat(
+          `${"=".repeat(5)} Account ${i + 1} | ${colors.green(first_name)} ${"=".repeat(
             5
-          )}`.blue
+          )}`,
+          "blue"
         );
         const token = await this.auth(userData);
         if (token) {
