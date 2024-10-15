@@ -389,8 +389,8 @@ class Fintopio {
       }
 
       // Add delay between processing users (10-20 seconds)
-          if (i < users.length - 1) {
-            await this.waitWithCountdown(Math.floor(Math.random() * 11) + 10, 'process next user');
+            if (i < users.length - 1) {
+               await this.waitWithCountdown(Math.floor(Math.random() * 11) + 10, 'process next user');
         }
       }
 
