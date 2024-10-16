@@ -15,5 +15,6 @@
     "dotenv": "^16.4.5",
     "luxon": "^3.5.0",
     "node-telegram-bot-api": "^0.63.0"
+    "https-proxy-agent": "^"
   }
 }
