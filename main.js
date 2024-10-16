@@ -5,7 +5,9 @@ const colors = require("colors");
 const readline = require("readline");
 const { DateTime } = require("luxon");
 const TelegramBot = require('node-telegram-bot-api');
+const HttpsProxyAgent = require('https-proxy-agent');
 require('dotenv').config();
+
 const stripAnsi = (str) => {
   // Regular expression to match ANSI color codes
   const ansiRegex = /\x1b\[.*?m/g;
@@ -30,13 +32,37 @@ class Fintopio {
     // Initialize Telegram Bot
     this.telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
     this.telegramChatId = process.env.TELEGRAM_CHAT_ID;
+    this.cycleReport = {
+      completedAccounts: 0,
+      totalBalance: 0
+    };
+    this.proxies = [];
+  }
+
+  async loadProxies() {
+    try {
+      const proxyFile = path.join(__dirname, "proxy.txt");
+      const proxyData = await fs.readFile(proxyFile, "utf8");
+      this.proxies = proxyData.split("\n").filter(Boolean).map(proxy => {
+        const [user, pass, ip, port] = proxy.split(':');
+        return { user, pass, ip, port };
+      });
+    } catch (error) {
+      await this.log(`Error loading proxies: ${error.message}`, "red");
+    }
+  }
+
+  getProxyAgent(index) {
+    if (this.proxies.length === 0) return null;
+    const proxy = this.proxies[index % this.proxies.length];
+    const proxyUrl = `http://${proxy.user}:${proxy.pass}@${proxy.ip}:${proxy.port}`;
+    return new HttpsProxyAgent(proxyUrl);
   }
 
   async log(msg, color = "white") {
     const coloredMsg = colors[color](msg);
     console.log(coloredMsg);
     await this.logToFile(stripAnsi(coloredMsg));
-    await this.sendLogToTelegram(stripAnsi(coloredMsg));
   }
 
   async logToFile(msg) {
@@ -46,24 +72,28 @@ class Fintopio {
     await fs.appendFile(logFile, logMessage);
   }
 
-  async sendLogToTelegram(msg) {
+  async sendCycleReportToTelegram() {
     if (!this.telegramBotToken || !this.telegramChatId) {
       console.log("Telegram bot token or chat ID not set. Skipping Telegram message.");
       return;
     }
 
     try {
+      const reportMessage = `Cycle Report:
+Completed Accounts: ${this.cycleReport.completedAccounts}
+Total Balance: ${this.cycleReport.totalBalance.toFixed(2)}`;
+
       const url = `https://api.telegram.org/bot${this.telegramBotToken}/sendMessage`;
       await axios.post(url, {
         chat_id: this.telegramChatId,
-        text: msg
+        text: reportMessage
       });
+      console.log("Cycle report sent to Telegram");
     } catch (error) {
-      console.error(`Failed to send log to Telegram: ${error.message}`);
+      console.error(`Failed to send cycle report to Telegram: ${error.message}`);
     }
   }
 
-  
   async waitWithCountdown(seconds, msg = 'continue') {
     // Add randomness to the delay: ±3 seconds
     const randomSeconds = seconds + Math.floor(Math.random() * 7) - 3;
@@ -82,12 +112,15 @@ class Fintopio {
     console.log("");
   }
 
-  async auth(userData) {
+  async auth(userData, proxyAgent) {
     const url = `${this.baseUrl}/auth/telegram`;
     const headers = { ...this.headers, Webapp: "true" };
 
     try {
-      const response = await axios.get(`${url}?${userData}`, { headers });
+      const response = await axios.get(`${url}?${userData}`, { 
+        headers,
+        httpsAgent: proxyAgent
+      });
       return response.data.token;
     } catch (error) {
       await this.log(`Authentication error: ${error.message}`, "red");
@@ -95,7 +128,7 @@ class Fintopio {
     }
   }
 
-  async getProfile(token) {
+  async getProfile(token, proxyAgent) {
     const url = `${this.baseUrl}/referrals/data`;
     const headers = {
       ...this.headers,
@@ -104,7 +137,10 @@ class Fintopio {
     };
 
     try {
-      const response = await axios.get(url, { headers });
+      const response = await axios.get(url, { 
+        headers,
+        httpsAgent: proxyAgent
+      });
       return response.data;
     } catch (error) {
       await this.log(`Error fetching profile: ${error.message}`, "red");
@@ -112,7 +148,7 @@ class Fintopio {
     }
   }
 
-  async checkInDaily(token) {
+  async checkInDaily(token, proxyAgent) {
     const url = `${this.baseUrl}/daily-checkins`;
     const headers = {
       ...this.headers,
@@ -121,14 +157,17 @@ class Fintopio {
     };
 
     try {
-      await axios.post(url, {}, { headers });
+      await axios.post(url, {}, { 
+        headers,
+        httpsAgent: proxyAgent
+      });
       await this.log("Daily check-in successful!", "green");
     } catch (error) {
       await this.log(`Daily check-in error: ${error.message}`, "red");
     }
   }
 
-  async getFarmingState(token) {
+  async getFarmingState(token, proxyAgent) {
     const url = `${this.baseUrl}/farming/state`;
     const headers = {
       ...this.headers,
@@ -136,7 +175,10 @@ class Fintopio {
     };
 
     try {
-      const response = await axios.get(url, { headers });
+      const response = await axios.get(url, { 
+        headers,
+        httpsAgent: proxyAgent
+      });
       return response.data;
     } catch (error) {
       await this.log(`Error fetching farming state: ${error.message}`, "red");
@@ -144,7 +186,7 @@ class Fintopio {
     }
   }
 
-  async startFarming(token) {
+  async startFarming(token, proxyAgent) {
     // Add delay before starting farming
     await this.waitWithCountdown(Math.floor(Math.random() * 11) + 5, 'start farming');
     
@@ -156,7 +198,10 @@ class Fintopio {
     };
 
     try {
-      const response = await axios.post(url, {}, { headers });
+      const response = await axios.post(url, {}, { 
+        headers,
+        httpsAgent: proxyAgent
+      });
       const finishTimestamp = response.data.timings.finish;
 
       if (finishTimestamp) {
@@ -173,7 +218,7 @@ class Fintopio {
     }
   }
 
-  async claimFarming(token) {
+  async claimFarming(token, proxyAgent) {
     // Add delay before claiming farming rewards
     await this.waitWithCountdown(Math.floor(Math.random() * 11) + 5, 'claim farming rewards');
     
@@ -185,14 +230,17 @@ class Fintopio {
     };
 
     try {
-      await axios.post(url, {}, { headers });
+      await axios.post(url, {}, { 
+        headers,
+        httpsAgent: proxyAgent
+      });
       await this.log("Farm claimed successfully!", "green");
     } catch (error) {
       await this.log(`Error claiming farm: ${error.message}`, "red");
     }
   }
 
-  async getDiamondInfo(token){
+  async getDiamondInfo(token, proxyAgent){
     const url = `${this.baseUrl}/clicker/diamond/state`;
     const headers = {
         ...this.headers,
@@ -201,7 +249,10 @@ class Fintopio {
     };
 
     try {
-        const response = await axios.get(url, { headers });
+        const response = await axios.get(url, { 
+          headers,
+          httpsAgent: proxyAgent
+        });
         return response.data;
     } catch (error) {
         await this.log(`Error fetching diamond state: ${error.message}`, "red");
@@ -209,7 +260,41 @@ class Fintopio {
     }
   }
 
-  async claimDiamond(token, diamondNumber, totalReward) {
+  async simulateMouseMovement() {
+    const movements = Math.floor(Math.random() * 10) + 5; // 5-15 movements
+    for (let i = 0; i < movements; i++) {
+      const x = Math.floor(Math.random() * window.innerWidth);
+      const y = Math.floor(Math.random() * window.innerHeight);
+      await this.log(`Simulated mouse move to (${x}, ${y})`, "cyan");
+      await new Promise(resolve => setTimeout(resolve, Math.random() * 200));
+    }
+  }
+
+  async occasionalMisclick() {
+    if (Math.random() < 0.1) { // 10% chance of misclick
+      const x = Math.floor(Math.random() * window.innerWidth);
+      const y = Math.floor(Math.random() * window.innerHeight);
+      await this.log(`Simulated misclick at (${x}, ${y})`, "yellow");
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+  }
+
+  async getClaimCoordinates(centerX, centerY, radius) {
+    const angle = Math.random() * 2 * Math.PI;
+    const r = Math.sqrt(Math.random()) * radius;
+    const x = centerX + r * Math.cos(angle);
+    const y = centerY + r * Math.sin(angle);
+    return { x: Math.floor(x), y: Math.floor(y) };
+  }
+
+  async claimDiamond(token, diamondNumber, totalReward, proxyAgent) {
+    const { x, y } = await this.getClaimCoordinates(250, 250, 50); // Assume button at (250,250) with 50px radius
+    await this.log(`Claiming at (${x}, ${y})`, "green");
+    await this.occasionalMisclick();
+    // Add random delay before claiming
+    const randomDelay = Math.floor(Math.random() * 5000) + 1000; // 1-6 seconds
+    await new Promise(resolve => setTimeout(resolve, randomDelay));
+
     const url = `${this.baseUrl}/clicker/diamond/complete`;
     const headers = {
         ...this.headers,
@@ -219,14 +304,17 @@ class Fintopio {
     const payload = { "diamondNumber": diamondNumber };
 
     try {
-        await axios.post(url, payload, { headers });
+        await axios.post(url, payload, { 
+          headers,
+          httpsAgent: proxyAgent
+        });
         await this.log(`Success claim ${totalReward} diamonds!`, "green");
     } catch (error) {
         await this.log(`Error claiming Diamond: ${error.message}`, "red");
     }
   }
 
-  async getTask(token) {
+  async getTask(token, proxyAgent) {
     const url = `${this.baseUrl}/hold/tasks`;
     const headers = {
         ...this.headers,
@@ -235,7 +323,10 @@ class Fintopio {
     };
 
     try {
-        const response = await axios.get(url, { headers });
+        const response = await axios.get(url, { 
+          headers,
+          httpsAgent: proxyAgent
+        });
         return response.data;
     } catch (error) {
         await this.log(`Error fetching task state: ${error.message}`, "red");
@@ -243,7 +334,7 @@ class Fintopio {
     }
   }
 
-  async startTask(token, taskId, slug) {
+  async startTask(token, taskId, slug, proxyAgent) {
     // Add delay before starting tasks
     await this.waitWithCountdown(Math.floor(Math.random() * 6) + 3, `start task ${slug}`);
     
@@ -255,14 +346,17 @@ class Fintopio {
         "origin": "https://fintopio-tg.fintopio.com"
     };
     try {
-        await axios.post(url, {}, { headers });
+        await axios.post(url, {}, { 
+          headers,
+          httpsAgent: proxyAgent
+        });
         await this.log(`Starting task ${slug}!`, "green");
     } catch (error) {
         await this.log(`Error starting task: ${error.message}`, "red");
     }
   }
 
-  async claimTask(token, taskId, slug, rewardAmount) {
+  async claimTask(token, taskId, slug, rewardAmount, proxyAgent) {
     // Add delay before claiming tasks
     await this.waitWithCountdown(Math.floor(Math.random() * 6) + 3, `claim task ${slug}`);
     
@@ -274,7 +368,10 @@ class Fintopio {
         "origin": "https://fintopio-tg.fintopio.com"
     };
     try {
-        await axios.post(url, {}, { headers });
+        await axios.post(url, {}, { 
+          headers,
+          httpsAgent: proxyAgent
+        });
         await this.log(`Task ${slug} complete, reward ${rewardAmount} diamonds!`, "green");
     } catch (error) {
         await this.log(`Error claiming task: ${error.message}`, "red");
@@ -304,12 +401,15 @@ class Fintopio {
   }
 
   async main() {
+    await this.loadProxies();
     while (true) {
       const dataFile = path.join(__dirname, "data.txt");
       const data = await fs.readFile(dataFile, "utf8");
       const users = data.split("\n").filter(Boolean);
 
       let firstAccountFinishTime = null;
+      this.cycleReport.completedAccounts = 0;
+      this.cycleReport.totalBalance = 0;
 
       for (let i = 0; i < users.length; i++) {
         const userData = users[i];
@@ -320,20 +420,22 @@ class Fintopio {
           )}`,
           "blue"
         );
-        const token = await this.auth(userData);
+        const proxyAgent = this.getProxyAgent(i);
+        const token = await this.auth(userData, proxyAgent);
         if (token) {
           await this.log(`Login successful!`, "green");
-          const profile = await this.getProfile(token);
+          const profile = await this.getProfile(token, proxyAgent);
           if (profile) {
             const balance = profile.balance;
             await this.log(`Balance: ${balance}`, "green");
+            this.cycleReport.totalBalance += parseFloat(balance);
 
-            await this.checkInDaily(token);
+            await this.checkInDaily(token, proxyAgent);
 
-            const diamond = await this.getDiamondInfo(token);
+            const diamond = await this.getDiamondInfo(token, proxyAgent);
             if(diamond.state === 'available') {
               await this.waitWithCountdown(Math.floor(Math.random() * (21 - 10)) + 10, 'claim Diamonds');
-              await this.claimDiamond(token, diamond.diamondNumber, diamond.settings.totalReward);
+              await this.claimDiamond(token, diamond.diamondNumber, diamond.settings.totalReward, proxyAgent);
             } else {
               const nextDiamondTimeStamp = diamond.timings.nextAt;
               if(nextDiamondTimeStamp) {
@@ -346,11 +448,11 @@ class Fintopio {
               }
             }
 
-            const farmingState = await this.getFarmingState(token);
+            const farmingState = await this.getFarmingState(token, proxyAgent);
 
             if (farmingState) {
               if (farmingState.state === "idling") {
-                await this.startFarming(token);
+                await this.startFarming(token, proxyAgent);
               } else if (
                 farmingState.state === "farmed" ||
                 farmingState.state === "farming"
@@ -362,21 +464,21 @@ class Fintopio {
 
                   const currentTime = DateTime.now().toMillis();
                   if (currentTime > finishTimestamp) {
-                    await this.claimFarming(token);
-                    await this.startFarming(token);
+                    await this.claimFarming(token, proxyAgent);
+                    await this.startFarming(token, proxyAgent);
                   }
                 }
               }
             }
 
-            const taskState = await this.getTask(token);
+            const taskState = await this.getTask(token, proxyAgent);
 
             if(taskState) {
               for (const item of taskState.tasks) {
                 if(item.status === 'available') {
-                  await this.startTask(token, item.id, item.slug);
+                  await this.startTask(token, item.id, item.slug, proxyAgent);
                 } else if(item.status === 'verified') {
-                  await this.claimTask(token, item.id, item.slug, item.rewardAmount);
+                  await this.claimTask(token, item.id, item.slug, item.rewardAmount, proxyAgent);
                 } else if(item.status === 'in-progress') {
                   continue;
                 } else {
@@ -384,15 +486,19 @@ class Fintopio {
                 }
               }
             }
+
+            this.cycleReport.completedAccounts++;
           }
+        }
+
+        // Add delay between processing users (10-20 seconds)
+        if (i < users.length - 1) {
+          await this.waitWithCountdown(Math.floor(Math.random() * 11) + 10, 'process next user');
         }
       }
 
-      // Add delay between processing users (10-20 seconds)
-      if (i < users.length - 1) {
-        await this.waitWithCountdown(Math.floor(Math.random() * 11) + 10, 'process next user');
-        }
-      }
+      // Send cycle report to Telegram
+      await this.sendCycleReportToTelegram();
 
       // Add randomness to the main loop delay
       const waitTime = this.calculateWaitTime(firstAccountFinishTime);
@@ -404,7 +510,7 @@ class Fintopio {
       }
     }
   }
-
+}
 
 if (require.main === module) {
   const fintopio = new Fintopio();
