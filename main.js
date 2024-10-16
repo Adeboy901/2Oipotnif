@@ -63,7 +63,7 @@ class Fintopio {
     }
   }
 
-  
+  async waitWithCountdown(seconds, msg = 'continue') {
   async waitWithCountdown(seconds, msg = 'continue') {
     // Add randomness to the delay: ±3 seconds
     const randomSeconds = seconds + Math.floor(Math.random() * 7) - 3;
@@ -381,101 +381,29 @@ class Fintopio {
                   continue;
                 } else {
                   await this.log(`Verifying task ${item.slug}!`, "green");
-async main() {
-    while (true) {
-        const dataFile = path.join(__dirname, "data.txt");
-        const data = await fs.readFile(dataFile, "utf8");
-        const users = data.split("\n").filter(Boolean);
-
-        let firstAccountFinishTime = null;
-
-        for (let i = 0; i < users.length; i++) {
-            const userData = users[i];
-            const first_name = this.extractFirstName(userData);
-            await this.log(
-                `${"=".repeat(5)} Account ${i + 1} | ${colors.green(first_name)} ${"=".repeat(5)}`,
-                "blue"
-            );
-
-            const token = await this.auth(userData);
-            if (token) {
-                await this.log(`Login successful!`, "green");
-                const profile = await this.getProfile(token);
-                if (profile) {
-                    const balance = profile.balance;
-                    await this.log(`Balance: ${balance}`, "green");
-
-                    await this.checkInDaily(token);
-
-                    const diamond = await this.getDiamondInfo(token);
-                    if (diamond.state === 'available') {
-                        await this.waitWithCountdown(Math.floor(Math.random() * (21 - 10)) + 10, 'claim Diamonds');
-                        await this.claimDiamond(token, diamond.diamondNumber, diamond.settings.totalReward);
-                    } else {
-                        const nextDiamondTimeStamp = diamond.timings.nextAt;
-                        if (nextDiamondTimeStamp) {
-                            const nextDiamondTime = DateTime.fromMillis(nextDiamondTimeStamp).toLocaleString(DateTime.DATETIME_FULL);
-                            await this.log(`Next Diamond time: ${nextDiamondTime}`, 'green');
-
-                            if (i === 0) {
-                                firstAccountFinishTime = nextDiamondTimeStamp;
-                            }
-                        }
-                    }
-
-                    const farmingState = await this.getFarmingState(token);
-
-                    if (farmingState) {
-                        if (farmingState.state === "idling") {
-                            await this.startFarming(token);
-                        } else if (farmingState.state === "farmed" || farmingState.state === "farming") {
-                            const finishTimestamp = farmingState.timings.finish;
-                            if (finishTimestamp) {
-                                const finishTime = DateTime.fromMillis(finishTimestamp).toLocaleString(DateTime.DATETIME_FULL);
-                                await this.log(`Farming completion time: ${finishTime}`, "green");
-
-                                const currentTime = DateTime.now().toMillis();
-                                if (currentTime > finishTimestamp) {
-                                    await this.claimFarming(token);
-                                    await this.startFarming(token);
-                                }
-                            }
-                        }
-                    }
-
-                    const taskState = await this.getTask(token);
-
-                    if (taskState) {
-                        for (const item of taskState.tasks) {
-                            if (item.status === 'available') {
-                                await this.startTask(token, item.id, item.slug);
-                            } else if (item.status === 'verified') {
-                                await this.claimTask(token, item.id, item.slug, item.rewardAmount);
-                            } else if (item.status === 'in-progress') {
-                                continue;
-                            } else {
-                                await this.log(`Verifying task ${item.slug}!`, "green");
-                            }
-                        }
-                    }
-
-                    // Add delay between processing users (10-20 seconds)
-                    if (i < users.length - 1) {
-                        await this.waitWithCountdown(Math.floor(Math.random() * 11) + 10, 'process next user');
-                    }
                 }
+              }
             }
+          }
         }
+      }
 
-        // Add randomness to the main loop delay
-        const waitTime = this.calculateWaitTime(firstAccountFinishTime);
-        if (waitTime && waitTime > 0) {
-            const randomWaitTime = waitTime + (Math.random() * 300000) - 150000; // Add ±2.5 minutes
-            await this.waitWithCountdown(Math.floor(randomWaitTime / 1000), 'start next cycle');
-        } else {
-            await this.waitWithCountdown(Math.floor(Math.random() * 31) + 30, 'start next cycle'); // 30-60 seconds if no valid wait time
+      // Add delay between processing users (10-20 seconds)
+        if (i < users.length - 1) {
+          await this.waitWithCountdown(Math.floor(Math.random() * 11) + 10, 'process next user');
         }
+      }
+
+      // Add randomness to the main loop delay
+      const waitTime = this.calculateWaitTime(firstAccountFinishTime);
+      if (waitTime && waitTime > 0) {
+        const randomWaitTime = waitTime + (Math.random() * 300000) - 150000; // Add ±2.5 minutes
+        await this.waitWithCountdown(Math.floor(randomWaitTime / 1000), 'start next cycle');
+      } else {
+        await this.waitWithCountdown(Math.floor(Math.random() * 31) + 30, 'start next cycle'); // 30-60 seconds if no valid wait time
+      }
     }
+  }
 }
 
 if (require.main === module) {
