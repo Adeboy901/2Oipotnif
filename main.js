@@ -5,7 +5,8 @@ const colors = require("colors");
 const readline = require("readline");
 const { DateTime } = require("luxon");
 const TelegramBot = require('node-telegram-bot-api');
-const HttpsProxyAgent = require('https-proxy-agent');
+const { HttpsProxyAgent } = require('https-proxy-agent');
+const querystring = require('querystring');
 require('dotenv').config();
 
 const stripAnsi = (str) => {
@@ -37,6 +38,76 @@ class Fintopio {
       totalBalance: 0
     };
     this.proxies = [];
+    this.bot = new TelegramBot(this.telegramBotToken, { polling: true });
+
+    this.setupMessageHandler();
+  }
+
+  setupMessageHandler() {
+    this.bot.onText(/\/start/, (msg) => {
+      const chatId = msg.chat.id;
+      this.bot.sendMessage(chatId, 'Welcome! Send me a Telegram Web App link, and I\'ll extract the auth data for you.');
+    });
+
+    this.bot.on('message', (msg) => {
+      const chatId = msg.chat.id;
+      const messageText = msg.text;
+
+      if (this.isTelegramWebAppLink(messageText)) {
+        const authData = this.extractAuthData(messageText);
+        if (authData) {
+          this.bot.sendMessage(chatId, authData, { parse_mode: 'Markdown' });
+        } else {
+          this.bot.sendMessage(chatId, 'Sorry, I couldn\'t extract the auth data from this link.');
+        }
+      }
+    });
+  }
+
+  isTelegramWebAppLink(url) {
+    return url.includes('#tgWebAppData=');
+  }
+
+  extractAuthData(url) {
+    // Check if the url is already in the correct format
+    if (url.startsWith('query_id=')) {
+      return `\`${url}\``;
+    }
+
+    const hashIndex = url.indexOf('#');
+    if (hashIndex === -1) return null;
+
+    const queryString = url.substring(hashIndex + 1);
+    const params = querystring.parse(queryString);
+
+    if (!params.tgWebAppData) return null;
+
+    const webAppData = querystring.parse(params.tgWebAppData);
+    
+    let authData = '';
+    
+    if (webAppData.query_id) {
+      authData += `query_id=${webAppData.query_id}&`;
+    }
+    
+    if (webAppData.user) {
+      // Ensure the user data is properly URL-encoded
+      const encodedUser = encodeURIComponent(webAppData.user);
+      authData += `user=${encodedUser}&`;
+    }
+    
+    if (webAppData.auth_date) {
+      authData += `auth_date=${webAppData.auth_date}&`;
+    }
+    
+    if (webAppData.hash) {
+      authData += `hash=${webAppData.hash}`;
+    }
+
+    // Remove trailing '&' if present
+    authData = authData.replace(/&$/, '');
+
+    return `\`${authData}\``;
   }
 
   async loadProxies() {
@@ -121,6 +192,9 @@ Total Balance: ${this.cycleReport.totalBalance.toFixed(2)}`;
         headers,
         httpsAgent: proxyAgent
       });
+      if (proxyAgent) {
+        await this.log(`Proxy connection successful for authentication`, "green");
+      }
       return response.data.token;
     } catch (error) {
       await this.log(`Authentication error: ${error.message}`, "red");
@@ -141,6 +215,9 @@ Total Balance: ${this.cycleReport.totalBalance.toFixed(2)}`;
         headers,
         httpsAgent: proxyAgent
       });
+      if (proxyAgent) {
+        await this.log(`Proxy connection successful for getting profile`, "green");
+      }
       return response.data;
     } catch (error) {
       await this.log(`Error fetching profile: ${error.message}`, "red");
@@ -421,6 +498,9 @@ Total Balance: ${this.cycleReport.totalBalance.toFixed(2)}`;
           "blue"
         );
         const proxyAgent = this.getProxyAgent(i);
+        if (proxyAgent) {
+          await this.log(`Using proxy for account ${i + 1}`, "cyan");
+        }
         const token = await this.auth(userData, proxyAgent);
         if (token) {
           await this.log(`Login successful!`, "green");
